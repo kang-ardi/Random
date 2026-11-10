@@ -1,0 +1,2169 @@
+Option Explicit
+Option Compare Text
+
+Const MAXINDEXROW = 1048576
+Const MAXINDEXCOLUMN = 16384
+Const FORMATSTRING = "0000000"
+
+Function myFilter(rng As Variant, filter As Variant, Optional isEmpty As String = "")
+    Dim Arr As Variant
+    Dim result As Variant
+    Dim crit As Variant
+    Dim maxRow As Long
+    Dim maxCol As Long
+    Dim maxRowArg As Long
+    Dim maxColArg As Long
+    Dim row As Long
+    Dim col As Long
+    Dim k As Long
+    Dim ind As Long
+    Dim maxDim As Long
+    Dim filterByCol As Boolean
+    
+    Arr = rng
+    Call repairArray(Arr)
+    maxRow = UBound(Arr, 1)
+    maxCol = UBound(Arr, 2)
+    
+    If maxRow > MAXINDEXROW Or maxCol > MAXINDEXCOLUMN Then
+        myFilter = "#OVERFLOW"
+Exit Function
+    End If
+    
+    filterByCol = False
+    maxDim = maxRow
+    
+    Call repairArray(filter)
+    If Not IsObject(filter) Then      'filter is an array
+        maxRowArg = UBound(filter, 1)
+        maxColArg = UBound(filter, 2)
+    Else                              'filter is a range
+        maxRowArg = filter.Rows.Count
+        maxColArg = filter.Columns.Count
+    End If
+    
+    If maxRowArg > 1 And maxColArg > 1 Then
+        myFilter = "#ERROR"
+Exit Function
+    Else
+        If maxRowArg = 1 Then
+            filterByCol = True
+            maxDim = maxCol
+        End If
+    End If
+
+    ReDim crit(1 To maxDim)
+    
+    If filterByCol Then
+        For k = 1 To maxDim
+            crit(k) = filter(1, k)
+        Next
+    Else
+        For k = 1 To maxDim
+            crit(k) = filter(k, 1)
+        Next
+    End If
+    
+    'filter the data
+    ReDim result(1 To maxRow, 1 To maxCol)
+    If filterByCol Then
+        ind = 1
+        For col = 1 To maxCol
+            If crit(col) Then
+                For row = 1 To maxRow
+                    If Arr(row, col) = "" Then
+                        result(row, ind) = ""
+                    Else
+                        result(row, ind) = Arr(row, col)
+                    End If
+                Next
+                ind = ind + 1
+            End If
+        Next
+        For col = ind To maxCol
+            For row = 1 To maxRow
+                result(row, col) = ""
+            Next
+        Next
+    Else
+        ind = 1
+        For row = 1 To maxRow
+            If crit(row) Then
+                For col = 1 To maxCol
+                    If Arr(row, col) = "" Then
+                        result(ind, col) = ""
+                    Else
+                        result(ind, col) = Arr(row, col)
+                    End If
+                Next
+                ind = ind + 1
+            End If
+        Next
+        For row = ind To maxRow
+            For col = 1 To maxCol
+                result(row, col) = ""
+            Next
+        Next
+    End If
+    If ind = 1 Then
+        result(1, 1) = isEmpty
+    End If
+    
+    myFilter = result
+End Function
+
+Function myUnique(rng As Variant, Optional byCol As Boolean = False, Optional exactOnce As Boolean = False)
+    Dim maxRow As Long
+    Dim maxCol As Long
+    Dim ind As Long
+    Dim k As Long
+    Dim cnt As Long
+    Dim Arr As Variant
+    Dim res As Variant
+    Dim result As Variant
+    Dim found As Boolean
+    Dim equal As Boolean
+    Dim leer As Boolean
+    Dim maxDim As Long
+    Dim row As Long
+    Dim col As Long
+    Dim cntEqual As Long
+    
+    Arr = rng
+    Call repairArray(Arr)
+    maxRow = UBound(Arr, 1)
+    maxCol = UBound(Arr, 2)
+    
+    If maxRow > MAXINDEXROW Or maxCol > MAXINDEXCOLUMN Then
+        myUnique = "#OVERFLOW"
+Exit Function
+    End If
+    
+    ReDim result(1 To maxRow, 1 To maxCol)
+    
+    cnt = 0
+    
+    If exactOnce Then
+        If byCol Then   'data record is a column
+            For col = 1 To maxCol
+                cntEqual = 0
+                For k = 1 To maxCol
+                    equal = True
+                    For row = 1 To maxRow
+                        If Arr(row, col) <> Arr(row, k) Then
+                            equal = False
+                            Exit For
+                        End If
+                    Next
+                    If equal Then
+                        cntEqual = cntEqual + 1
+                    End If
+                    If cntEqual > 1 Then Exit For
+                Next
+                If cntEqual = 1 Then
+                    leer = True
+                    For row = 1 To maxRow
+                        If Arr(row, col) <> "" Then
+                            leer = False
+                            Exit For
+                        End If
+                    Next
+                    If Not leer Then
+                        cnt = cnt + 1
+                        For row = 1 To maxRow
+                            If Arr(row, col) = "" Then
+                                result(row, cnt) = ""
+                            Else
+                                result(row, cnt) = Arr(row, col)
+                            End If
+                        Next
+                    End If
+                End If
+            Next
+        Else     'data record is a row
+            For row = 1 To maxRow
+                cntEqual = 0
+                For k = 1 To maxRow
+                    equal = True
+                    For col = 1 To maxCol
+                        If Arr(row, col) <> Arr(k, col) Then
+                            equal = False
+                            Exit For
+                        End If
+                    Next
+                    If equal Then
+                        cntEqual = cntEqual + 1
+                    End If
+                    If cntEqual > 1 Then Exit For
+                Next
+                If cntEqual = 1 Then
+                    leer = True
+                    For col = 1 To maxCol
+                        If Arr(row, col) <> "" Then
+                            leer = False
+                            Exit For
+                        End If
+                    Next
+                    If Not leer Then
+                        cnt = cnt + 1
+                        For col = 1 To maxCol
+                            If Arr(row, col) = "" Then
+                                result(cnt, col) = ""
+                            Else
+                                result(cnt, col) = Arr(row, col)
+                            End If
+                        Next
+                    End If
+                End If
+            Next
+        End If
+    Else    'not exactOnce
+        If byCol Then   'data record is a column
+            For col = 1 To maxCol
+                found = False
+                For k = 1 To cnt
+                    equal = True
+                    For row = 1 To maxRow
+                        If Arr(row, col) <> result(row, k) Then
+                            equal = False
+                            Exit For
+                        End If
+                    Next
+                    If equal Then
+                        found = True
+                        Exit For
+                    End If
+                Next
+                If Not found Then
+                    leer = True
+                    For row = 1 To maxRow
+                        If Arr(row, col) <> "" Then
+                            leer = False
+                            Exit For
+                        End If
+                    Next
+                    If Not leer Then
+                        cnt = cnt + 1
+                        For row = 1 To maxRow
+                            If Arr(row, col) = "" Then
+                                result(row, cnt) = ""
+                            Else
+                                result(row, cnt) = Arr(row, col)
+                            End If
+                        Next
+                    End If
+                End If
+            Next
+        Else     'data record is a row
+            For row = 1 To maxRow
+                found = False
+                For k = 1 To cnt
+                    equal = True
+                    For col = 1 To maxCol
+                        If Arr(row, col) <> result(k, col) Then
+                            equal = False
+                            Exit For
+                        End If
+                    Next
+                    If equal Then
+                        found = True
+                        Exit For
+                    End If
+                Next
+                If Not found Then
+                    leer = True
+                    For col = 1 To maxCol
+                        If Arr(row, col) <> "" Then
+                            leer = False
+                            Exit For
+                        End If
+                    Next
+                    If Not leer Then
+                        cnt = cnt + 1
+                        For col = 1 To maxCol
+                            If Arr(row, col) = "" Then
+                                result(cnt, col) = ""
+                            Else
+                                result(cnt, col) = Arr(row, col)
+                            End If
+                        Next
+                    End If
+                End If
+            Next
+        End If
+    End If
+    
+    cnt = cnt + 1
+    
+    If byCol Then
+        For col = cnt To maxCol
+            For row = 1 To maxRow
+                result(row, col) = ""
+            Next
+        Next
+    Else
+        For row = cnt To maxRow
+            For col = 1 To maxCol
+                result(row, col) = ""
+            Next
+        Next
+    End If
+    
+    myUnique = result
+End Function
+
+
+Option Explicit
+Option Compare Text
+
+Const MAXINDEXROW = 1048576
+Const MAXINDEXCOLUMN = 16384
+Const FORMATSTRING = "0000000"
+
+Function XLookup(ParamArray arg() As Variant)
+'(crit, lookArr, retArr, if_not_found, match_mode, search_mode)
+
+    Dim crit As Variant
+    Dim critArr As Variant
+    Dim retArr As Variant
+    Dim lookArr As Variant
+    Dim indArr As Variant
+    Dim ret As Variant
+    Dim notFnd As String
+    Dim mMode As Long
+    Dim sMode As Long
+    Dim argCnt As Long
+    Dim byRow As Boolean
+    Dim maxrowCrit As Long
+    Dim maxcolCrit As Long
+    Dim maxrowLook As Long
+    Dim maxcolLook As Long
+    Dim maxrowRet As Long
+    Dim maxcolRet As Long
+    Dim ind As Long
+    Dim row As Long
+    Dim col As Long
+    Dim critInd As Long
+    
+    argCnt = UBound(arg)
+    
+    If (argCnt < 2) Or (argCnt > 5) Then EXIT_BY_ERROR  '****
+    
+    'argument 1 (crit)
+    If IsMissing(arg(0)) Then
+        arg(0) = ""
+    End If
+    
+    If Not IsArray(arg(0)) Then
+        ReDim crit(1 To 1)
+        crit(1) = arg(0)
+    Else
+        critArr = arg(0)
+        Call repairArray(critArr)
+        maxrowCrit = UBound(critArr, 1)
+        maxcolCrit = UBound(critArr, 2)
+        If maxrowCrit > 1 And maxcolCrit > 1 Then EXIT_BY_ERROR   '****
+        If maxrowCrit > 1 Then
+            ReDim crit(1 To maxrowCrit)
+            For row = 1 To maxrowCrit
+                crit(row) = critArr(row, 1)
+            Next
+        Else
+            ReDim crit(1 To maxcolCrit)
+            For col = 1 To maxcolCrit
+                crit(col) = critArr(1, col)
+            Next
+        End If
+    End If
+    
+    'argument 2 (lookArr)
+    If Not IsArray(arg(1)) Then EXIT_BY_ERROR   '****
+    lookArr = arg(1)
+    Call repairArray(lookArr)
+    maxrowLook = UBound(lookArr, 1)
+    maxcolLook = UBound(lookArr, 2)
+    If maxrowLook > 1 And maxcolLook > 1 Then EXIT_BY_ERROR   '****
+    byRow = (maxcolLook > 1)
+    
+    'argument 3 (retArr)
+    If Not IsArray(arg(2)) Then EXIT_BY_ERROR   '****
+    If IsObject(arg(2)) Then
+        Set retArr = arg(2)
+        maxrowRet = retArr.Rows.Count
+        maxcolRet = retArr.Columns.Count
+    Else
+        retArr = arg(2)
+        Call repairArray(retArr)
+        maxrowRet = UBound(retArr, 1)
+        maxcolRet = UBound(retArr, 2)
+    End If
+    
+    If byRow And (maxcolLook <> maxcolRet) Then EXIT_BY_ERROR   '****
+    If Not byRow And (maxrowLook <> maxrowRet) Then EXIT_BY_ERROR   '****
+    
+    'argument 4 (notFnd)
+    If argCnt >= 3 Then
+        If IsMissing(arg(3)) Then
+            notFnd = "#N/A"
+        Else
+            notFnd = arg(3)
+        End If
+    Else
+        notFnd = "#N/A"
+    End If
+
+    'argument 5 (mMode)
+    If argCnt >= 4 Then
+        If IsMissing(arg(4)) Then
+            mMode = 0
+        Else
+            mMode = arg(4)
+        End If
+    Else
+        mMode = 0
+    End If
+    If mMode <> 0 And mMode <> 1 And mMode <> -1 And mMode <> 2 Then EXIT_BY_ERROR   '****
+
+    'argument 6 (sMode)
+    If argCnt >= 5 Then
+        If IsMissing(arg(5)) Then
+            sMode = 1
+        Else
+            sMode = arg(5)
+        End If
+    Else
+        sMode = 1
+    End If
+    If sMode <> 1 And sMode <> 2 And sMode <> -1 And sMode <> -2 Then EXIT_BY_ERROR   '****
+    
+    'calculating XLOOKUP
+    indArr = lookupIndex(crit, lookArr, byRow, mMode, sMode)
+    
+    'return the searching result
+    If UBound(indArr, 1) < 2 Then
+        ind = indArr(1)
+        If ind = -1 Then
+            ret = notFnd
+        Else
+            If byRow Then
+                If IsObject(retArr) Then
+                    Set ret = Range(retArr.Cells(1, ind), retArr.Cells(maxrowRet, ind))
+                Else
+                    ReDim ret(1 To maxrowRet, 1 To 1)
+                    For row = 1 To maxrowRet
+                        ret(row, 1) = retArr(row, ind)
+                    Next
+                End If
+            Else
+                If IsObject(retArr) Then
+                    Set ret = Range(retArr.Cells(ind, 1), retArr.Cells(ind, maxcolRet))
+                Else
+                    ReDim ret(1 To 1, 1 To maxcolRet)
+                    For col = 1 To maxcolRet
+                        ret(1, col) = retArr(ind, col)
+                    Next
+                End If
+            End If
+        End If
+        
+        If IsObject(ret) Then
+            Set XLookup = ret
+        Else
+            XLookup = ret
+        End If
+    Else   'search criterium is an array
+        If byRow Then
+            ReDim ret(1 To maxrowRet, 1 To UBound(indArr, 1))
+            For col = 1 To UBound(indArr, 1)
+                If indArr(col) = -1 Then
+                    ret(1, col) = notFnd
+                    For row = 2 To maxrowRet
+                        ret(row, col) = ""
+                    Next
+                Else
+                    For row = 1 To maxrowRet
+                        ret(row, col) = retArr(row, indArr(col))
+                    Next
+                End If
+            Next
+        Else
+            ReDim ret(1 To UBound(indArr, 1), 1 To maxcolRet)
+            For row = 1 To UBound(indArr, 1)
+                If indArr(row) = -1 Then
+                    ret(row, 1) = notFnd
+                    For col = 2 To maxcolRet
+                        ret(row, col) = ""
+                    Next
+                Else
+                    For col = 1 To maxcolRet
+                        ret(row, col) = retArr(indArr(row), col)
+                    Next
+                End If
+            Next
+        End If
+              
+        XLookup = ret
+    End If
+End Function
+
+Private Function lookupIndex(crit As Variant, lookArr As Variant, byRow As Boolean, mMode As Long, sMode As Long) As Variant
+    Dim Arr As Variant
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim ind As Long
+    
+    If byRow Then
+        maxInd = UBound(lookArr, 2)
+        ReDim Arr(1 To maxInd, 1 To 1)
+        For ind = 1 To maxInd
+            Arr(ind, 1) = lookArr(1, ind)
+        Next
+    Else
+        Arr = lookArr
+    End If
+    
+    ReDim indArr(1 To UBound(crit, 1))
+    
+    'lookup
+    If sMode = 1 Then
+        If mMode = 0 Then
+            indArr = SeqLookupExactAsc(Arr, crit, mMode)   'sMode = 1, mMode = 0
+        Else
+            indArr = SeqLookupAsc(Arr, crit, mMode)           'sMode = 1, mMode = 1, -1, 2
+        End If
+    ElseIf sMode = -1 Then
+        If mMode = 0 Then
+            indArr = SeqLookupExactDesc(Arr, crit, mMode)  'sMode = -1, mMode = 0
+        Else
+            indArr = SeqLookupDesc(Arr, crit, mMode)           'sMode = -1, mMode = 1, -1, 2
+        End If
+    ElseIf sMode = 2 Then
+        If mMode = 2 Then
+            indArr = SeqLookupAsc(Arr, crit, mMode)        'sMode = 2, mMode = 2
+        Else
+            indArr = BinSearchLookupAsc(Arr, crit, mMode)      'sMode = 2, mMode = 0, 1, -1
+        End If
+    Else   'sMode = -2
+        If mMode = 2 Then
+            indArr = SeqLookupDesc(Arr, crit, mMode)       'sMode = -2, mMode = 2
+        Else
+            indArr = BinSearchLookupDesc(Arr, crit, mMode)     'sMode = -2, mMode = 0, 1, -1
+        End If
+    End If
+    
+    lookupIndex = indArr
+End Function
+
+Function SeqLookupExactAsc(Arr As Variant, crit As Variant, mMode As Long)
+'A little bit faster than SeqLookupAsc
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim critCnt As Long
+    Dim critInd As Long
+    Dim ind As Long
+    Dim gefunden As Boolean
+
+    maxInd = UBound(Arr, 1)
+    critCnt = UBound(crit, 1)
+    ReDim indArr(1 To critCnt)
+
+    For critInd = 1 To critCnt
+        ind = 1
+        gefunden = False
+        While ind <= maxInd And Not gefunden
+            If Arr(ind, 1) <> crit(critInd) Then
+                ind = ind + 1
+            Else
+                gefunden = True
+            End If
+        Wend
+        If Not gefunden Then
+            indArr(critInd) = -1
+        Else
+            indArr(critInd) = ind
+        End If
+    Next
+
+    SeqLookupExactAsc = indArr
+End Function
+
+Function SeqLookupExactDesc(Arr As Variant, crit As Variant, mMode As Long)
+'A little bit faster than SeqLookupDesc
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim critCnt As Long
+    Dim critInd As Long
+    Dim ind As Long
+    Dim gefunden As Boolean
+
+    maxInd = UBound(Arr, 1)
+    critCnt = UBound(crit, 1)
+    ReDim indArr(1 To critCnt)
+
+    For critInd = 1 To critCnt
+        ind = maxInd
+        gefunden = False
+        While ind >= 1 And Not gefunden
+            If Arr(ind, 1) <> crit(critInd) Then
+                ind = ind - 1
+            Else
+                gefunden = True
+            End If
+        Wend
+        If Not gefunden Then
+            indArr(critInd) = -1
+        Else
+            indArr(critInd) = ind
+        End If
+    Next
+
+    SeqLookupExactDesc = indArr
+End Function
+
+Function SeqLookupAsc(Arr As Variant, crit As Variant, mMode As Long)
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim critCnt As Long
+    Dim critInd As Long
+    Dim ind As Long
+    Dim gefunden As Boolean
+    Dim uppClosest As Variant
+    Dim lowClosest As Variant
+    Dim uppInd As Long
+    Dim lowInd As Long
+
+    maxInd = UBound(Arr, 1)
+    critCnt = UBound(crit, 1)
+    ReDim indArr(1 To critCnt)
+
+    For critInd = 1 To critCnt
+        If mMode < 2 Then    'mMode -1, 0, 1
+            ind = 1
+            gefunden = False
+            uppInd = -1
+            lowInd = -1
+            While ind <= maxInd And Not gefunden
+                If Arr(ind, 1) > crit(critInd) Then
+                    If uppInd = -1 Then
+                        uppInd = ind
+                        uppClosest = Arr(ind, 1)
+                    Else
+                        If Arr(ind, 1) < uppClosest Then
+                            uppInd = ind
+                            uppClosest = Arr(ind, 1)
+                        End If
+                    End If
+                    ind = ind + 1
+                ElseIf Arr(ind, 1) < crit(critInd) Then
+                    If lowInd = -1 Then
+                        lowInd = ind
+                        lowClosest = Arr(ind, 1)
+                    Else
+                        If Arr(ind, 1) > lowClosest Then
+                            lowInd = ind
+                            lowClosest = Arr(ind, 1)
+                        End If
+                    End If
+                    ind = ind + 1
+                Else
+                    gefunden = True
+                End If
+            Wend
+            If Not gefunden Then
+                If mMode = 1 Then
+                    indArr(critInd) = uppInd
+                ElseIf mMode = -1 Then
+                    indArr(critInd) = lowInd
+                Else
+                    indArr(critInd) = -1
+                End If
+            Else
+                indArr(critInd) = ind
+            End If
+        Else  'mMode = 2
+            ind = 1
+            gefunden = False
+            While ind <= maxInd And Not gefunden
+                If Not (Arr(ind, 1) Like crit(critInd)) Then
+                    ind = ind + 1
+                Else
+                    gefunden = True
+                End If
+            Wend
+            If Not gefunden Then
+                indArr(critInd) = -1
+            Else
+                indArr(critInd) = ind
+            End If
+        End If
+    Next
+    
+    SeqLookupAsc = indArr
+End Function
+
+Function SeqLookupDesc(Arr As Variant, crit As Variant, mMode As Long)
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim critCnt As Long
+    Dim critInd As Long
+    Dim ind As Long
+    Dim gefunden As Boolean
+    Dim uppClosest As Variant
+    Dim lowClosest As Variant
+    Dim uppInd As Long
+    Dim lowInd As Long
+
+    maxInd = UBound(Arr, 1)
+    critCnt = UBound(crit, 1)
+    ReDim indArr(1 To critCnt)
+
+    For critInd = 1 To critCnt
+        If mMode < 2 Then    'mMode -1, 0, 1
+            ind = maxInd
+            gefunden = False
+            uppInd = -1
+            lowInd = -1
+            While ind >= 1 And Not gefunden
+                If Arr(ind, 1) > crit(critInd) Then
+                    If uppInd = -1 Then
+                        uppInd = ind
+                        uppClosest = Arr(ind, 1)
+                    Else
+                        If Arr(ind, 1) < uppClosest Then
+                            uppInd = ind
+                            uppClosest = Arr(ind, 1)
+                        End If
+                    End If
+                    ind = ind - 1
+                ElseIf Arr(ind, 1) < crit(critInd) Then
+                    If lowInd = -1 Then
+                        lowInd = ind
+                        lowClosest = Arr(ind, 1)
+                    Else
+                        If Arr(ind, 1) > lowClosest Then
+                            lowInd = ind
+                            lowClosest = Arr(ind, 1)
+                        End If
+                    End If
+                    ind = ind - 1
+                Else
+                    gefunden = True
+                End If
+            Wend
+            If Not gefunden Then
+                If mMode = 1 Then
+                    indArr(critInd) = uppInd
+                ElseIf mMode = -1 Then
+                    indArr(critInd) = lowInd
+                Else
+                    indArr(critInd) = -1
+                End If
+            Else
+                indArr(critInd) = ind
+            End If
+        Else  'mMode = 2
+            ind = maxInd
+            gefunden = False
+            While ind >= 1 And Not gefunden
+                If Not (Arr(ind, 1) Like crit(critInd)) Then
+                    ind = ind - 1
+                Else
+                    gefunden = True
+                End If
+            Wend
+            If Not gefunden Then
+                indArr(critInd) = -1
+            Else
+                indArr(critInd) = ind
+            End If
+        End If
+    Next
+
+    SeqLookupDesc = indArr
+End Function
+
+Function BinSearchLookupAsc(Arr As Variant, crit As Variant, mMode As Long)
+    Dim low As Long
+    Dim upp As Long
+    Dim mid As Long
+    Dim maxLoops As Long
+    Dim loops As Long
+    Dim retInd As Long
+    
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim critCnt As Long
+    Dim critInd As Long
+
+    maxInd = UBound(Arr, 1)
+    critCnt = UBound(crit, 1)
+    ReDim indArr(1 To critCnt)
+    
+    For critInd = 1 To critCnt
+        If crit(critInd) < Arr(1, 1) Then
+            If mMode = 1 Then
+                retInd = 1
+            Else   'mMode -1, 0, 2
+                retInd = -1
+            End If
+        Else
+            If crit(critInd) > Arr(maxInd, 1) Then
+                If mMode = -1 Then
+                    retInd = maxInd
+                Else   'mMode 1, 0, 2
+                    retInd = -1
+                End If
+            Else   'binary search
+                low = 1
+                upp = maxInd
+                maxLoops = Int(Log(upp) / Log(2)) + 2
+                
+                loops = 0
+                While low < upp And loops <= maxLoops
+                    mid = (low + upp) \ 2
+                    If crit(critInd) > Arr(mid, 1) Then
+                        low = mid + 1
+                    Else
+                        upp = mid
+                    End If
+                    loops = loops + 1
+                Wend
+                
+                If loops > maxLoops Then
+                    retInd = -1
+                ElseIf crit(critInd) = Arr(low, 1) Then
+                    retInd = low
+                ElseIf mMode = 1 Then
+                    retInd = low
+                ElseIf mMode = -1 Then
+                    retInd = low - 1
+                Else
+                    retInd = -1
+                End If
+            End If
+        End If
+        indArr(critInd) = retInd
+    Next
+    
+    BinSearchLookupAsc = indArr
+End Function
+
+Function BinSearchLookupDesc(Arr As Variant, crit As Variant, mMode As Long)
+    Dim low As Long
+    Dim upp As Long
+    Dim mid As Long
+    Dim maxLoops As Long
+    Dim loops As Long
+    Dim retInd As Long
+    
+    Dim indArr As Variant
+    Dim maxInd As Long
+    Dim critCnt As Long
+    Dim critInd As Long
+
+    maxInd = UBound(Arr, 1)
+    critCnt = UBound(crit, 1)
+    ReDim indArr(1 To critCnt)
+    
+    For critInd = 1 To critCnt
+        If crit(critInd) < Arr(maxInd, 1) Then
+            If mMode = 1 Then
+                retInd = maxInd
+            Else   'mMode -1, 0, 2
+                retInd = -1
+            End If
+        Else
+            If crit(critInd) > Arr(1, 1) Then
+                If mMode = 1 Then
+                    retInd = -1
+                Else   'mMode -1, 0, 2
+                    retInd = 1
+                End If
+            Else   'binary search
+                low = 1
+                upp = maxInd
+                maxLoops = Int(Log(upp) / Log(2)) + 2
+                
+                loops = 0
+                While low < upp And loops <= maxLoops
+                    mid = (low + upp) \ 2
+                    If crit(critInd) < Arr(mid, 1) Then
+                        low = mid + 1
+                    Else
+                        upp = mid
+                    End If
+                    loops = loops + 1
+                Wend
+                
+                If loops > maxLoops Then
+                    retInd = -1
+                ElseIf crit(critInd) = Arr(low, 1) Then
+                    retInd = low
+                ElseIf mMode = 1 Then
+                    retInd = low - 1
+                ElseIf mMode = -1 Then
+                    retInd = low
+                Else
+                    retInd = -1
+                End If
+            End If
+        End If
+        indArr(critInd) = retInd
+    Next
+    
+    BinSearchLookupDesc = indArr
+End Function
+
+Function XMatch(ParamArray arg() As Variant)
+'(crit, lookArr, match_mode, search_mode)
+
+    Dim crit As Variant
+    Dim critArr As Variant
+    Dim lookArr As Variant
+    Dim indArr As Variant
+    Dim ret As Variant
+    Dim maxrowCrit As Long
+    Dim maxcolCrit As Long
+    Dim mMode As Long
+    Dim sMode As Long
+    Dim argCnt As Long
+    Dim byRow As Boolean
+    Dim maxrowLook As Long
+    Dim maxcolLook As Long
+    Dim row As Long
+    Dim col As Long
+    Dim ind As Long
+    
+    argCnt = UBound(arg)
+    
+    If argCnt < 1 Then EXIT_BY_ERROR   '****
+    
+    'argument 1 (crit)
+    If IsMissing(arg(0)) Then
+        arg(0) = ""
+    End If
+    
+    If Not IsArray(arg(0)) Then
+        ReDim crit(1 To 1)
+        crit(1) = arg(0)
+    Else
+        critArr = arg(0)
+        Call repairArray(critArr)
+        maxrowCrit = UBound(critArr, 1)
+        maxcolCrit = UBound(critArr, 2)
+        If maxrowCrit > 1 And maxcolCrit > 1 Then EXIT_BY_ERROR   '****
+        If maxrowCrit > 1 Then
+            ReDim crit(1 To maxrowCrit)
+            For row = 1 To maxrowCrit
+                crit(row) = critArr(row, 1)
+            Next
+        Else
+            ReDim crit(1 To maxcolCrit)
+            For col = 1 To maxcolCrit
+                crit(col) = critArr(1, col)
+            Next
+        End If
+    End If
+    
+    'argument 2 (lookArr)
+    If Not IsArray(arg(1)) Then EXIT_BY_ERROR   '****
+    lookArr = arg(1)
+    Call repairArray(lookArr)
+    maxrowLook = UBound(lookArr, 1)
+    maxcolLook = UBound(lookArr, 2)
+    If maxrowLook > 1 And maxcolLook > 1 Then EXIT_BY_ERROR   '****
+    byRow = (maxcolLook > 1)
+    
+    'argument 3 (mMode)
+    If argCnt >= 2 Then
+        If IsMissing(arg(2)) Then
+            mMode = 0
+        Else
+            mMode = arg(2)
+        End If
+    Else
+        mMode = 0
+    End If
+
+    'argument 4 (sMode)
+    If argCnt >= 3 Then
+        If IsMissing(arg(3)) Then
+            sMode = 1
+        Else
+            sMode = arg(3)
+        End If
+    Else
+        sMode = 1
+    End If
+    
+    'Calculate XMatch
+    indArr = lookupIndex(crit, lookArr, byRow, mMode, sMode)
+    
+    'Prepare the Return array
+    For ind = 1 To UBound(indArr, 1)
+        If indArr(ind) = -1 Then
+            indArr(ind) = "#NV"
+        End If
+    Next
+    
+    If byRow Then
+        ReDim ret(1 To 1, 1 To UBound(indArr, 1))
+        For col = 1 To UBound(indArr, 1)
+            ret(1, col) = indArr(col)
+        Next
+    Else
+        ReDim ret(1 To UBound(indArr, 1), 1 To 1)
+        For row = 1 To UBound(indArr, 1)
+            ret(row, 1) = indArr(row)
+        Next
+    End If
+    
+    XMatch = ret
+End Function
+
+Function XLookup2(ParamArray arg() As Variant)
+'(crit1, lookArr1, retArr, if_not_found, match_mode, search_mode, crit2, lookArr2, crit3, lookArr3, ...)
+
+    Dim critArr As Variant
+    Dim retArr As Variant
+    Dim lkArr As Variant
+    Dim Arr As Variant
+    Dim lookArr As Variant
+    Dim indArr As Variant
+    Dim notFnd As Variant
+    Dim mMode As Long
+    Dim sMode As Long
+    Dim argCnt As Long
+    Dim critCnt As Long
+    Dim argNr As Long
+    Dim critNr As Long
+    Dim maxInd As Long
+    Dim byRow As Boolean
+    Dim maxrowLook As Long
+    Dim maxcolLook As Long
+    Dim maxrowRet As Long
+    Dim maxcolRet As Long
+    Dim ind As Long
+    Dim row As Long
+    Dim col As Long
+    Dim ret As Variant
+    
+    argCnt = UBound(arg)
+    
+    If argCnt < 2 Then EXIT_BY_ERROR   '****
+    
+    If argCnt < 6 Then
+        critCnt = 1
+    Else
+        critCnt = (argCnt - 4) \ 2 + 1
+    End If
+    
+    ReDim critArr(1 To critCnt)
+    ReDim lookArr(1 To critCnt)
+    
+    'argument 1 (crit1)
+    If IsMissing(arg(0)) Then
+        critArr(1) = ""
+    Else
+        critArr(1) = arg(0)
+    End If
+    
+    'argument 2 (lookArr1)
+    If Not IsArray(arg(1)) Then EXIT_BY_ERROR   '****
+    lkArr = arg(1)
+    Call repairArray(lkArr)
+    maxrowLook = UBound(lkArr, 1)
+    maxcolLook = UBound(lkArr, 2)
+    If maxrowLook > 1 And maxcolLook > 1 Then EXIT_BY_ERROR   '****
+    byRow = (maxcolLook > 1)
+    
+    If byRow Then
+        maxInd = maxcolLook
+    Else
+        maxInd = maxrowLook
+    End If
+
+    If byRow Then
+        ReDim Arr(1 To maxInd, 1 To 1)
+        For ind = 1 To maxInd
+            Arr(ind, 1) = lkArr(1, ind)
+        Next
+        lookArr(1) = Arr
+    Else
+        lookArr(1) = lkArr
+    End If
+    
+    'argument 3 (retArr)
+    If Not IsArray(arg(2)) Then EXIT_BY_ERROR   '****
+    If IsObject(arg(2)) Then
+        Set retArr = arg(2)
+        maxrowRet = retArr.Rows.Count
+        maxcolRet = retArr.Columns.Count
+    Else
+        retArr = arg(2)
+        Call repairArray(retArr)
+        maxrowRet = UBound(retArr, 1)
+        maxcolRet = UBound(retArr, 2)
+    End If
+    
+    If byRow And (maxcolLook <> maxcolRet) Then EXIT_BY_ERROR   '****
+    If Not byRow And (maxrowLook <> maxrowRet) Then EXIT_BY_ERROR   '****
+    
+    'argument 4 (notFnd)
+    If argCnt >= 3 Then
+        If IsMissing(arg(3)) Then
+            notFnd = CVErr(xlErrNA)
+        Else
+            notFnd = arg(3)
+        End If
+    Else
+        notFnd = CVErr(xlErrNA)
+    End If
+
+    'argument 5 (mMode)
+    If argCnt >= 4 Then
+        If IsMissing(arg(4)) Then
+            mMode = 0
+        Else
+            mMode = arg(4)
+        End If
+    Else
+        mMode = 0
+    End If
+    If mMode <> 0 And mMode <> 2 Then EXIT_BY_ERROR   '****
+
+    'argument 6 (sMode)
+    If argCnt >= 5 Then
+        If IsMissing(arg(5)) Then
+            sMode = 1
+        Else
+            sMode = arg(5)
+        End If
+    Else
+        sMode = 1
+    End If
+    If sMode <> 1 And sMode <> 2 And sMode <> -1 And sMode <> -2 Then EXIT_BY_ERROR   '****
+    
+    'more lookup criteria
+    If argCnt >= 6 Then
+        For argNr = 6 To argCnt
+            critNr = (argNr - 4) \ 2 + 1
+            If argNr Mod 2 = 0 Then   'lookup criterion
+                If IsMissing(arg(argNr)) Then
+                    critArr(critNr) = ""
+                Else
+                    critArr(critNr) = arg(argNr)
+                End If
+            Else       'lookup array
+                If Not IsArray(arg(argNr)) Then EXIT_BY_ERROR   '****
+                lkArr = arg(argNr)
+                Call repairArray(lkArr)
+                maxrowLook = UBound(lkArr, 1)
+                maxcolLook = UBound(lkArr, 2)
+                If maxrowLook > 1 And maxcolLook > 1 Then EXIT_BY_ERROR   '****
+                
+                If byRow Then
+                    ReDim Arr(1 To maxInd, 1 To 1)
+                    For ind = 1 To maxInd
+                        Arr(ind, 1) = lkArr(1, ind)
+                    Next
+                    lookArr(critNr) = Arr
+                Else
+                    lookArr(critNr) = lkArr
+                End If
+            End If
+        Next
+    End If
+    
+    'calculating XLOOKUP
+    If sMode = 1 Then
+        indArr = SeqLookupAsc2Break(lookArr, critArr, mMode)
+    ElseIf sMode = -1 Then
+        indArr = SeqLookupDesc2Break(lookArr, critArr, mMode)
+    ElseIf sMode = 2 Then
+        indArr = SeqLookupAsc2All(lookArr, critArr, mMode)
+    Else    'sMode = -2
+        indArr = SeqLookupDesc2All(lookArr, critArr, mMode)
+    End If
+    
+    'preparing return array
+    If indArr(1) < 1 Then
+        ret = notFnd
+    Else
+        If sMode = 2 Or sMode = -2 Then
+            ReDim ret(1 To maxrowRet, 1 To maxcolRet)
+            If byRow Then
+                For col = 1 To maxcolRet
+                    For row = 1 To maxrowRet
+                        If indArr(row) >= 1 Then
+                            If retArr(row, indArr(col)) = "" Then
+                                ret(row, col) = ""
+                            Else
+                                ret(row, col) = retArr(row, indArr(col))
+                            End If
+                        Else
+                            ret(row, col) = ""
+                        End If
+                    Next
+                Next
+            Else
+                For row = 1 To maxrowRet
+                    For col = 1 To maxcolRet
+                        If indArr(row) >= 1 Then
+                            If retArr(indArr(row), col) = "" Then
+                                ret(row, col) = ""
+                            Else
+                                ret(row, col) = retArr(indArr(row), col)
+                            End If
+                        Else
+                            ret(row, col) = ""
+                        End If
+                    Next
+                Next
+            End If
+        Else
+            If byRow Then
+                If IsObject(retArr) Then
+                    Set ret = Range(retArr.Cells(1, indArr(1)), retArr.Cells(maxrowRet, indArr(1)))
+                Else
+                    ReDim ret(1 To maxrowRet, 1 To 1)
+                    For row = 1 To maxrowRet
+                        If retArr(row, indArr(1)) = "" Then
+                            ret(row, 1) = ""
+                        Else
+                            ret(row, 1) = retArr(row, indArr(1))
+                        End If
+                    Next
+                End If
+            Else
+                If IsObject(retArr) Then
+                    Set ret = Range(retArr.Cells(indArr(1), 1), retArr.Cells(indArr(1), maxcolRet))
+                Else
+                    ReDim ret(1 To 1, 1 To maxcolRet)
+                    For col = 1 To maxcolRet
+                        If retArr(indArr(1), col) = "" Then
+                            ret(1, col) = ""
+                        Else
+                            ret(1, col) = retArr(indArr(1), col)
+                        End If
+                    Next
+                End If
+            End If
+        End If
+    End If
+    
+    If IsObject(ret) Then
+        Set XLookup2 = ret
+    Else
+        XLookup2 = ret
+    End If
+End Function
+
+Function SeqLookupAsc2Break(lookArr As Variant, critArr As Variant, mMode As Long)
+    Dim maxInd As Long
+    Dim ind As Long
+    Dim critCnt As Long
+    Dim critNr As Long
+    Dim gefunden As Boolean
+    Dim indArr As Variant
+
+    maxInd = UBound(lookArr(1), 1)
+    critCnt = UBound(critArr, 1)
+    ReDim indArr(maxInd)
+
+    If mMode = 0 Then    'mMode = 0
+        ind = 1
+        While ind <= maxInd
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (lookArr(critNr)(ind, 1) <> critArr(critNr)) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                indArr(1) = ind
+                ind = maxInd   'Break
+            End If
+            ind = ind + 1
+        Wend
+    Else  'mMode = 2
+        ind = 1
+        While ind <= maxInd
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (Not (lookArr(critNr)(ind, 1) Like critArr(critNr))) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                indArr(1) = ind
+                ind = maxInd   'Break
+            End If
+            ind = ind + 1
+        Wend
+    End If
+    
+    SeqLookupAsc2Break = indArr
+End Function
+
+Function SeqLookupDesc2Break(lookArr As Variant, critArr As Variant, mMode As Long)
+    Dim maxInd As Long
+    Dim ind As Long
+    Dim critCnt As Long
+    Dim critNr As Long
+    Dim gefunden As Boolean
+    Dim indArr As Variant
+
+    maxInd = UBound(lookArr(1), 1)
+    critCnt = UBound(critArr, 1)
+    ReDim indArr(maxInd)
+
+    If mMode = 0 Then    'mMode = 0
+        ind = maxInd
+        While ind >= 1
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (lookArr(critNr)(ind, 1) <> critArr(critNr)) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                indArr(1) = ind
+                ind = 1    'Break
+            End If
+            ind = ind - 1
+        Wend
+    Else  'mMode = 2
+        ind = maxInd
+        While ind >= 1
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (Not (lookArr(critNr)(ind, 1) Like critArr(critNr))) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                indArr(1) = ind
+                ind = 1    'Break
+            End If
+            ind = ind - 1
+        Wend
+    End If
+
+    SeqLookupDesc2Break = indArr
+End Function
+
+Function SeqLookupAsc2All(lookArr As Variant, critArr As Variant, mMode As Long)
+    Dim maxInd As Long
+    Dim ind As Long
+    Dim k As Long
+    Dim critCnt As Long
+    Dim critNr As Long
+    Dim gefunden As Boolean
+    Dim indArr As Variant
+
+    maxInd = UBound(lookArr(1), 1)
+    critCnt = UBound(critArr, 1)
+    ReDim indArr(maxInd)
+
+    If mMode = 0 Then    'mMode = 0
+        ind = 1
+        k = 0
+        While ind <= maxInd
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (lookArr(critNr)(ind, 1) <> critArr(critNr)) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                k = k + 1
+                indArr(k) = ind
+            End If
+            ind = ind + 1
+        Wend
+    Else  'mMode = 2
+        ind = 1
+        k = 0
+        While ind <= maxInd
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (Not (lookArr(critNr)(ind, 1) Like critArr(critNr))) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                k = k + 1
+                indArr(k) = ind
+            End If
+            ind = ind + 1
+        Wend
+    End If
+    
+    SeqLookupAsc2All = indArr
+End Function
+
+Function SeqLookupDesc2All(lookArr As Variant, critArr As Variant, mMode As Long)
+    Dim maxInd As Long
+    Dim ind As Long
+    Dim k As Long
+    Dim critCnt As Long
+    Dim critNr As Long
+    Dim gefunden As Boolean
+    Dim indArr As Variant
+
+    maxInd = UBound(lookArr(1), 1)
+    critCnt = UBound(critArr, 1)
+    ReDim indArr(maxInd)
+
+    If mMode = 0 Then    'mMode = 0
+        ind = maxInd
+        k = 0
+        While ind >= 1
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (lookArr(critNr)(ind, 1) <> critArr(critNr)) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                k = k + 1
+                indArr(k) = ind
+            End If
+            ind = ind - 1
+        Wend
+    Else  'mMode = 2
+        ind = maxInd
+        k = 0
+        While ind >= 1
+            gefunden = True
+            For critNr = 1 To critCnt
+                If (Not (lookArr(critNr)(ind, 1) Like critArr(critNr))) And (critArr(critNr) <> "") Then
+                    gefunden = False
+                    Exit For
+                End If
+            Next
+            If gefunden Then
+                k = k + 1
+                indArr(k) = ind
+            End If
+            ind = ind - 1
+        Wend
+    End If
+
+    SeqLookupDesc2All = indArr
+End Function
+
+Function Sort_(rng As Variant, ParamArray arg() As Variant)
+    Dim Arr As Variant
+    Dim arrArg As Variant
+    Dim crit As Variant
+    Dim asc() As Long
+    Dim i As Long
+    Dim cr As Long
+    Dim argCnt As Long
+    Dim maxRow As Long
+    Dim maxCol As Long
+    Dim maxDim As Long
+    Dim maxDim2 As Long
+    Dim sortByCol As Boolean
+    Dim singleCrit As Boolean
+    Dim critColNums() As Long
+    
+    Arr = rng
+    Call repairArray(Arr)
+    maxRow = UBound(Arr, 1)
+    maxCol = UBound(Arr, 2)
+    
+    If maxRow > MAXINDEXROW Or maxCol > MAXINDEXCOLUMN Then
+        Sort_ = "#OVERFLOW"
+Exit Function
+    End If
+    
+    
+    argCnt = UBound(arg)
+    
+    If argCnt > 2 Then
+        EXIT_BY_ERROR
+    End If
+    
+    'check by_col
+    If argCnt >= 2 Then
+        If IsMissing(arg(2)) Then
+            sortByCol = False
+            maxDim = maxRow
+            maxDim2 = maxCol
+        Else
+            If arg(2) Then
+                sortByCol = True
+                maxDim = maxCol
+                maxDim2 = maxRow
+            Else
+                sortByCol = False
+                maxDim = maxRow
+                maxDim2 = maxCol
+            End If
+        End If
+    Else
+        sortByCol = False
+        maxDim = maxRow
+        maxDim2 = maxCol
+    End If
+    
+    'sorting criteria
+    If argCnt >= 0 Then
+        If IsMissing(arg(0)) Then
+            ReDim critColNums(1 To 1)
+            critColNums(1) = 1
+        Else
+            If IsArray(arg(0)) Then
+                Call getArg(arg(0), critColNums)
+            Else
+                ReDim critColNums(1 To 1)
+                critColNums(1) = arg(0)
+            End If
+        End If
+    Else
+        ReDim critColNums(1 To 1)
+        critColNums(1) = 1
+    End If
+    
+    For i = 1 To UBound(critColNums, 1)
+        If critColNums(i) < 1 Or critColNums(i) > maxDim2 Then EXIT_BY_ERROR
+    Next
+    
+    'sorting directions
+    If argCnt >= 1 Then
+        If IsArray(arg(1)) Then
+            Call getArg(arg(1), asc)
+            If UBound(asc, 1) <> UBound(critColNums, 1) Then EXIT_BY_ERROR
+        Else
+            ReDim asc(1 To 1)
+            If IsMissing(arg(1)) Then
+                asc(1) = 1
+            Else
+                asc(1) = arg(1)
+            End If
+        End If
+    Else
+        ReDim asc(1 To 1)
+        asc(1) = 1
+    End If
+    ReDim Preserve asc(1 To UBound(critColNums))
+    
+    ReDim crit(1 To UBound(critColNums, 1), 1 To maxDim)
+    
+    'build criteria arrays
+    If sortByCol Then
+        For cr = 1 To UBound(critColNums, 1)
+            For i = 1 To maxDim
+                crit(cr, i) = Arr(critColNums(cr), i)
+            Next
+        Next
+    Else
+        For cr = 1 To UBound(critColNums, 1)
+            For i = 1 To maxDim
+                crit(cr, i) = Arr(i, critColNums(cr))
+            Next
+        Next
+    End If
+            
+    Sort_ = arSort(Arr, crit, asc, maxDim, sortByCol)
+End Function
+
+Function Sortby(rng As Variant, ParamArray arg() As Variant)
+    Dim Arr As Variant
+    Dim arrArg As Variant
+    Dim crit As Variant
+    Dim asc() As Long
+    Dim i As Long
+    Dim cr As Long
+    Dim argCnt As Long
+    Dim crCnt As Long
+    Dim maxRow As Long
+    Dim maxCol As Long
+    Dim maxrowCrit As Long
+    Dim maxcolCrit As Long
+    Dim maxDim As Long
+    Dim maxDim2 As Long
+    Dim sortByCol As Boolean
+    Dim singleCrit As Boolean
+    
+    Arr = rng
+    Call repairArray(Arr)
+    maxRow = UBound(Arr, 1)
+    maxCol = UBound(Arr, 2)
+    
+    If maxRow > MAXINDEXROW Or maxCol > MAXINDEXCOLUMN Then
+        Sortby = "#OVERFLOW"
+Exit Function
+    End If
+    
+    sortByCol = False
+    maxDim = maxRow
+    
+    argCnt = UBound(arg)
+    
+    If argCnt < 0 Then EXIT_BY_ERROR
+    
+    'check by_col
+    Call repairArray(arg(0))
+    If Not IsObject(arg(0)) Then      'arg(0) is an array
+        maxrowCrit = UBound(arg(0), 1)
+        maxcolCrit = UBound(arg(0), 2)
+    Else                              'arg(0) is a range
+        maxrowCrit = arg(0).Rows.Count
+        maxcolCrit = arg(0).Columns.Count
+    End If
+    
+    If maxrowCrit > 1 And maxcolCrit > 1 Then
+        EXIT_BY_ERROR
+    Else
+        If maxrowCrit = 1 Then
+            sortByCol = True
+            maxDim = maxCol
+        End If
+    End If
+    
+    'sorting directions
+    crCnt = argCnt \ 2 + 1
+    ReDim asc(1 To crCnt)
+    
+    For cr = 0 To argCnt
+        If cr Mod 2 > 0 Then
+            If Not IsMissing(arg(cr)) Then
+                If arg(cr) = -1 Then
+                    asc(cr \ 2 + 1) = -1
+                End If
+            End If
+        End If
+    Next
+    
+    'build criteria arrays
+    ReDim crit(1 To crCnt, 1 To maxDim)
+    For cr = 0 To argCnt
+        If cr Mod 2 = 0 Then
+            arrArg = arg(cr)
+            Call repairArray(arrArg)
+            If sortByCol Then
+                For i = 1 To maxDim
+                    crit(cr \ 2 + 1, i) = arrArg(1, i)
+                Next
+            Else
+                For i = 1 To maxDim
+                    crit(cr \ 2 + 1, i) = arrArg(i, 1)
+                Next
+            End If
+        End If
+    Next
+    
+    Sortby = arSort(Arr, crit, asc, maxDim, sortByCol)
+End Function
+
+Function Sortby2(rng As Variant, ParamArray arg() As Variant)
+    Dim Arr As Variant
+    Dim arrArg As Variant
+    Dim crit As Variant
+    Dim asc() As Long
+    Dim i As Long
+    Dim cr As Long
+    Dim crCnt As Long
+    Dim argCnt As Long
+    Dim maxRow As Long
+    Dim maxCol As Long
+    Dim maxrowCrit As Long
+    Dim maxcolCrit As Long
+    Dim maxDim As Long
+    Dim maxDim2 As Long
+    Dim sortByCol As Boolean
+    Dim rfCriteria As Variant
+    Dim rfCriteriaUsed As Variant
+    Dim rfCriteriaIndex As Long
+    
+    Arr = rng
+    Call repairArray(Arr)
+    maxRow = UBound(Arr, 1)
+    maxCol = UBound(Arr, 2)
+    
+    If maxRow > MAXINDEXROW Or maxCol > MAXINDEXCOLUMN Then
+        Sortby2 = "#OVERFLOW"
+Exit Function
+    End If
+    
+    sortByCol = False
+    maxDim = maxRow
+    maxDim2 = maxCol
+    
+    argCnt = UBound(arg)
+    
+    If argCnt < 0 Then EXIT_BY_ERROR
+    
+    'check by_col
+    Call repairArray(arg(0))
+    If Not IsObject(arg(0)) Then      'arg(0) is an array
+        maxrowCrit = UBound(arg(0), 1)
+        maxcolCrit = UBound(arg(0), 2)
+    Else                              'arg(0) is a range
+        maxrowCrit = arg(0).Rows.Count
+        maxcolCrit = arg(0).Columns.Count
+    End If
+    
+    If maxrowCrit > 1 And maxcolCrit > 1 Then
+        EXIT_BY_ERROR
+    Else
+        If maxrowCrit = 1 Then
+            sortByCol = True
+            maxDim = maxCol
+            maxDim2 = maxRow
+        End If
+    End If
+    
+    'sorting directions
+    crCnt = argCnt \ 2 + 1
+    ReDim asc(1 To crCnt)
+    
+    For cr = 0 To argCnt
+        If cr Mod 2 > 0 Then
+            If Not IsMissing(arg(cr)) Then
+                If arg(cr) = -1 Then
+                    asc(cr \ 2 + 1) = -1
+                End If
+            End If
+        End If
+    Next
+    
+    'build criteria arrays
+    ReDim crit(1 To crCnt, 1 To maxDim)
+    
+    ReDim rfCriteria(1 To maxDim2 * 2)
+    ReDim rfCriteriaUsed(1 To maxDim2 * 2)
+    rfCriteriaIndex = 1
+    
+    For cr = 0 To argCnt
+        If cr Mod 2 = 0 Then
+            arrArg = arg(cr)
+            Call repairArray(arrArg)
+            If sortByCol Then
+                For i = 1 To maxDim
+                    crit(cr \ 2 + 1, i) = arrArg(1, i)
+                Next
+                rfCriteria(rfCriteriaIndex) = arg(cr).row - rng.row + 1
+                rfCriteriaUsed(arg(cr).row - rng.row + 1) = True
+                rfCriteriaIndex = rfCriteriaIndex + 1
+            Else
+                For i = 1 To maxDim
+                    crit(cr \ 2 + 1, i) = arrArg(i, 1)
+                Next
+                rfCriteria(rfCriteriaIndex) = arg(cr).Column - rng.Column + 1
+                rfCriteriaUsed(arg(cr).Column - rng.Column + 1) = True
+                rfCriteriaIndex = rfCriteriaIndex + 1
+            End If
+        End If
+    Next
+        
+    i = 1
+    While i <= maxDim2
+        If Not rfCriteriaUsed(i) Then
+            rfCriteria(rfCriteriaIndex) = i
+            rfCriteriaIndex = rfCriteriaIndex + 1
+        End If
+        i = i + 1
+    Wend
+    
+    Sortby2 = arSort(Arr, crit, asc, maxDim, sortByCol, 2, rfCriteria)
+End Function
+
+Private Sub repairArray(ByRef Arr As Variant)
+    Dim res As Variant
+    Dim uBnd As Long
+    Dim maxCol As Long
+    Dim col As Long
+    
+    If Not IsObject(Arr) Then      'arr is an array, not a range
+On Error GoTo UBoundError          'Workaraound for Microsofts UBound bug in case of a single row array (single column array is okay)
+        uBnd = UBound(Arr, 2)
+        GoTo GoOn    'no error
+UBoundError:
+        maxCol = UBound(Arr, 1)
+        ReDim res(1 To 1, 1 To maxCol)
+        For col = 1 To maxCol
+            res(1, col) = Arr(col)
+        Next
+        Arr = res
+        Resume GoOn
+GoOn:
+On Error GoTo 0
+    End If
+End Sub
+
+Private Sub getArg(Arr As Variant, ByRef arguments() As Long)
+    Dim uBnd1 As Long
+    Dim uBnd2 As Long
+    Dim i As Long
+    
+    Call repairArray(Arr)
+    If Not IsObject(Arr) Then      'arr is an array
+        uBnd1 = UBound(Arr, 1)
+        uBnd2 = UBound(Arr, 2)
+    Else                           'arr is a range
+        uBnd1 = Arr.Rows.Count
+        uBnd2 = Arr.Columns.Count
+    End If
+    
+    If uBnd1 > 1 And uBnd2 > 1 Then
+        EXIT_BY_ERROR
+    Else
+        If uBnd1 = 1 Then
+            ReDim arguments(1 To uBnd2)
+            For i = 1 To uBnd2
+                arguments(i) = Arr(1, i)
+            Next
+        Else
+            ReDim arguments(1 To uBnd1)
+            For i = 1 To uBnd1
+                arguments(i) = Arr(i, 1)
+            Next
+        End If
+    End If
+End Sub
+
+Private Sub EXIT_BY_ERROR()
+    Dim errorArr() As Long
+    errorArr(0) = 1   'exit by #VALUE error
+End Sub
+
+Private Function arSort(Arr As Variant, crit As Variant, asc As Variant, maxDim As Long, sortByCol As Boolean, _
+                      Optional mode As Long = 1, Optional rfCriteria As Variant = Null)
+
+    Dim sortArr() As Variant
+    Dim sortString() As String
+    Dim rank() As Variant
+    Dim rf As Variant
+    Dim crCnt As Long
+    Dim i As Long
+    Dim ind As Long
+    Dim row As Long
+    Dim col As Long
+    Dim cr As Long
+    
+    ReDim sortString(maxDim)
+    ReDim sortArr(maxDim)
+    ReDim rank(maxDim)
+    ReDim rf(maxDim)
+    
+    crCnt = UBound(crit, 1)
+    
+    'criterion 1
+    For i = 1 To maxDim
+        rf(i) = i
+    Next
+    For ind = 1 To maxDim
+        sortArr(ind) = crit(1, ind)
+    Next
+    If asc(1) = -1 Then
+        Call arQuicksortDesc(sortArr, 1, maxDim, rf)
+    Else
+        Call arQuicksort(sortArr, 1, maxDim, rf)
+    End If
+    
+    If crCnt > 1 Then
+        'ranking 1
+        i = 1
+        rank(rf(1)) = 1
+        For ind = 2 To maxDim
+            If crit(1, rf(ind)) <> crit(1, rf(ind - 1)) Then
+                i = i + 1
+            End If
+            rank(rf(ind)) = i
+        Next
+        For row = 1 To maxDim
+            sortString(row) = Format(rank(row), FORMATSTRING)
+        Next
+        
+        For cr = 2 To crCnt
+            'criterion
+            For i = 1 To maxDim
+                rf(i) = i
+            Next
+            For ind = 1 To maxDim
+                sortArr(ind) = crit(cr, ind)
+            Next
+            If asc(cr) = -1 Then
+                Call arQuicksortDesc(sortArr, 1, maxDim, rf)
+            Else
+                Call arQuicksort(sortArr, 1, maxDim, rf)
+            End If
+            'ranking
+            i = 1
+            rank(rf(1)) = 1
+            For ind = 2 To maxDim
+                If crit(cr, rf(ind)) <> crit(cr, rf(ind - 1)) Then
+                    i = i + 1
+                End If
+                rank(rf(ind)) = i
+            Next
+            For row = 1 To maxDim
+                sortString(row) = sortString(row) & Format(rank(row), FORMATSTRING)
+            Next
+        Next
+        
+        'final sorting
+        For i = 1 To maxDim
+            rf(i) = i
+        Next
+        For row = 1 To maxDim
+            sortArr(row) = sortString(row)
+        Next
+        Call arQuicksort(sortArr, 1, maxDim, rf)
+    End If
+    
+    'prepare the return array
+    sortArr = Arr
+    If mode = 2 Then
+        If sortByCol Then
+            For row = 1 To UBound(Arr, 1)
+                For col = 1 To UBound(Arr, 2)
+                    If Arr(row, rf(col)) = "" Then
+                        sortArr(row, col) = ""
+                    Else
+                        sortArr(row, col) = Arr(rfCriteria(row), rf(col))
+                    End If
+                Next
+            Next
+        Else
+            For row = 1 To UBound(Arr, 1)
+                For col = 1 To UBound(Arr, 2)
+                    If Arr(rf(row), col) = "" Then
+                        sortArr(row, col) = ""
+                    Else
+                        sortArr(row, col) = Arr(rf(row), rfCriteria(col))
+                    End If
+                Next
+            Next
+        End If
+    Else
+        If sortByCol Then
+            For row = 1 To UBound(Arr, 1)
+                For col = 1 To UBound(Arr, 2)
+                    If Arr(row, rf(col)) = "" Then
+                        sortArr(row, col) = ""
+                    Else
+                        sortArr(row, col) = Arr(row, rf(col))
+                    End If
+                Next
+            Next
+        Else
+            For row = 1 To UBound(Arr, 1)
+                For col = 1 To UBound(Arr, 2)
+                    If Arr(rf(row), col) = "" Then
+                        sortArr(row, col) = ""
+                    Else
+                        sortArr(row, col) = Arr(rf(row), col)
+                    End If
+                Next
+            Next
+        End If
+    End If
+    
+    arSort = sortArr
+End Function
+
+Private Function arQuicksort(Arr As Variant, arrLeft As Long, arrRight As Long, rf As Variant)
+Dim pivot As Variant
+Dim tmp As Variant
+Dim left As Long
+Dim right As Long
+ 
+left = arrLeft
+right = arrRight
+pivot = Arr((arrLeft + arrRight) \ 2)
+ 
+While (left <= right)
+   While ((Arr(left) < pivot And Arr(left) <> "") Or (Arr(left) <> "" And pivot = "") And left < arrRight)
+      left = left + 1
+   Wend
+  
+   While ((pivot < Arr(right) And pivot <> "") Or (pivot <> "" And Arr(right) = "") And arrLeft < right)
+      right = right - 1
+   Wend
+ 
+   If (left <= right) Then
+      tmp = Arr(left)
+      Arr(left) = Arr(right)
+      Arr(right) = tmp
+      tmp = rf(left)
+      rf(left) = rf(right)
+      rf(right) = tmp
+      left = left + 1
+      right = right - 1
+   End If
+Wend
+ 
+  If (arrLeft < right) Then arQuicksort Arr, arrLeft, right, rf
+  If (left < arrRight) Then arQuicksort Arr, left, arrRight, rf
+End Function
+
+Private Function arQuicksortDesc(Arr As Variant, arrLeft As Long, arrRight As Long, rf As Variant)
+Dim pivot As Variant
+Dim tmp As Variant
+Dim left As Long
+Dim right As Long
+ 
+left = arrLeft
+right = arrRight
+pivot = Arr((arrLeft + arrRight) \ 2)
+ 
+While (left <= right)
+   While (Arr(left) > pivot Or (Arr(left) <> "" And pivot = "") And left < arrRight)
+      left = left + 1
+   Wend
+  
+   While (pivot > Arr(right) Or (pivot <> "" And Arr(right) = "") And arrLeft < right)
+      right = right - 1
+   Wend
+ 
+   If (left <= right) Then
+      tmp = Arr(left)
+      Arr(left) = Arr(right)
+      Arr(right) = tmp
+      tmp = rf(left)
+      rf(left) = rf(right)
+      rf(right) = tmp
+      left = left + 1
+      right = right - 1
+   End If
+Wend
+ 
+  If (arrLeft < right) Then arQuicksortDesc Arr, arrLeft, right, rf
+  If (left < arrRight) Then arQuicksortDesc Arr, left, arrRight, rf
+End Function
+Function Randarray(ParamArray arg() As Variant)
+    Dim argCnt As Long
+    Dim arguments() As Long
+    Dim result() As Double
+    Dim i As Long
+    Dim k As Long
+    
+    'getting arguments
+    argCnt = UBound(arg) + 1
+    ReDim arguments(1 To 5)
+    
+    arguments(1) = 1
+    arguments(2) = 1
+    arguments(3) = 0
+    arguments(4) = 1
+    arguments(5) = False
+    
+    If argCnt > 0 Then
+        For i = 1 To argCnt
+            If Not IsMissing(arg(i - 1)) Then
+                arguments(i) = arg(i - 1)
+            End If
+        Next
+    End If
+    
+    If arguments(3) >= arguments(4) Then arguments(0) = 1  'exit by #VALUE error
+    
+    'preparing result array
+    ReDim result(1 To arguments(1), 1 To arguments(2))
+    
+    Randomize
+    For i = 1 To arguments(1)
+        For k = 1 To arguments(2)
+            If arguments(5) Then
+                result(i, k) = Int((arguments(4) - arguments(3) + 1) * Rnd + arguments(3))
+            Else
+                result(i, k) = (arguments(4) - arguments(3)) * Rnd + arguments(3)
+            End If
+        Next
+    Next
+    
+    Randarray = result
+End Function
+
+Function Sequence(ParamArray arg() As Variant)
+    Dim argCnt As Long
+    Dim arguments() As Long
+    Dim result() As Long
+    Dim i As Long
+    Dim k As Long
+    Dim res As Long
+    
+    'getting arguments
+    argCnt = UBound(arg) + 1
+    ReDim arguments(1 To 4)
+    
+    If argCnt < 1 Then
+        For i = 1 To 4
+            arguments(i) = 1
+        Next
+    Else
+        For i = 1 To argCnt
+            If IsMissing(arg(i - 1)) Then
+                arguments(i) = 1
+            Else
+                arguments(i) = arg(i - 1)
+            End If
+        Next
+        For i = argCnt + 1 To 4
+            arguments(i) = 1
+        Next
+    End If
+    
+    'preparing result array
+    ReDim result(1 To arguments(1), 1 To arguments(2))
+    res = arguments(3)
+    For i = 1 To arguments(1)
+        For k = 1 To arguments(2)
+            result(i, k) = res
+            res = res + arguments(4)
+        Next
+    Next
+    
+    Sequence = result
+End Function
+
+
+Sub DateValidation()
+Dim initDate As Date
+Dim startDate As Date
+Dim endDate As Date
+Dim eoMonth As Date
+
+initDate = Sheet4.Range("j2")
+startDate = Sheet4.Range("k2")
+endDate = Sheet4.Range("l2")
+eoMonth = Sheet4.Range("m2")
+
+
+With Sheet5.Range("E1").Validation
+    On Error Resume Next
+    .Delete
+    On Error GoTo 0
+    .Add xlValidateDate, AlertStyle:=xlValidAlertStop, Formula1:=initDate, Formula2:=endDate
+    .ErrorTitle = "Tanggal tidak valid"
+    .ErrorMessage = "Pilih antara tanggal " & WorksheetFunction.Text(initDate, "[$-0421]dd mmmm yyyy") & " sampai tanggal " & WorksheetFunction.Text(endDate, "[$-0421]dd mmmm yyyy")
+End With
+
+With Sheet5.Range("H1").Validation
+    On Error Resume Next
+    .Delete
+    On Error GoTo 0
+    .Add xlValidateDate, AlertStyle:=xlValidAlertStop, Formula1:=startDate, Formula2:=eoMonth
+    .ErrorTitle = "Tanggal tidak valid"
+    .ErrorMessage = "Pilih antara tanggal " & WorksheetFunction.Text(startDate, "[$-0421]dd mmmm yyyy") & " sampai tanggal " & WorksheetFunction.Text(eoMonth, "[$-0421]dd mmmm yyyy")
+End With
+End Sub
+
+
+
+
+
+
